@@ -1,0 +1,127 @@
+#!/usr/bin/env python
+from optparse import OptionParser
+from BeautifulSoup import BeautifulSoup
+from urllib2 import urlopen
+from urlparse import urljoin,urlsplit
+from sys import stdout
+from urllib import urlretrieve
+import os.path
+import re
+parser=OptionParser()
+
+parser.add_option('-C','--chapters',dest='chap',help='Chapters to download. Accepts a hyphenated range Starting from 1. If not specified or exceeds than the actual chapters, downloads all the chapters.',metavar='RANGE')
+parser.add_option('-d','--directory',dest='dir',default=None, metavar='DIR',help='Directory in which the Manga is to be saved. Default will be a directory human-named according to the URL')
+parser.add_option('-v',action='store_true',dest='verbose',default=False,help='Show extra debugging information')
+parser.add_option('-q',action='store_true',dest='quiet',default=False,help='Do not output anything on screen')
+parser.add_option('-o','--overwrite',action='store_true',default=False,help='Overwrite if the file already exist, try to continue if using --wget')
+parser.add_option('-w','--wget',action='store_true',dest='wget',default=False,help='Use wget program to download the files, recommended if on *nix Platforms')
+parser.add_option('-r','--retries',type='int',dest='retries',default=3,help='Number of tries to download a file incase of error in downloading')
+(options,args)=parser.parse_args()
+
+js_re=re.compile(r'Array[(](.*)[)];var')
+
+def print_scr(msg,verbose=False):
+    if not options.quiet:
+        if verbose==False:
+            print msg
+        elif options.verbose:
+            print msg
+
+def ensure_dir(f):
+    """Ensures that the directory needed for file f exists. Is created if does not exists"""
+    d = os.path.dirname(f)
+    if not os.path.exists(d):
+        os.makedirs(d)
+
+
+def hyphen_range(s):
+    """ Takes a range in form of "a-b" and generate a list of numbers between a and b inclusive.
+    Also accepts comma separated ranges like "a-b,c-d,f" will build a list which will include
+    Numbers from a to b, a to d and f"""
+    s="".join(s.split())#removes white space
+    r=set()
+    for x in s.split(','):
+        t=x.split('-')
+        if len(t) not in [1,2]: raise SyntaxError("hash_range is given its arguement as "+s+" which seems not correctly formated.")
+        r.add(int(t[0])) if len(t)==1 else r.update(set(range(int(t[0]),int(t[1])+1)))
+    l=list(r)
+    l.sort()
+    return l
+
+def downld_manga(first_page_url,manga_dir=None,chapt=None,ignore_order=True):
+    """first_page_url is the link to any of the manga page.
+    manga_dir is the directory where you want to save the manga.
+    chapt is the list of the chapters you want to download. Should be 1-based if ignore_order is True.
+    ignore_order if set false, will require each chapt number to map to the actual number of the server.
+    This only makes a difference when your starting chapter is not 1
+    """
+    # soup=BeautifulSoup( #urlopen(chp_url).read())
+    #rel_link_1stpage=str(soup.find('div',id='chapter-cover').find('li').a['href'])#relative link to the first page
+    #link_1stpage=urljoin(chp_url,rel_link_1stpage) #Full-url of first page
+    print_scr("Link given "+first_page_url)
+    soup=BeautifulSoup(urlopen(first_page_url).read()) #the first page
+    mangalink=str(soup.find('h1').findAll('a')[1]['href'])
+    mangaurl=urljoin(first_page_url,mangalink)
+    mangadir=manga_dir if manga_dir else str(soup.find('h1').findAll('a')[1].string) # if dir name is not specified let the manga name be dirname
+    print_scr("Manga Found :"+mangaurl)
+    js_page_link=str(soup.findAll('script')[-1]['src']) #the page containgin the chapter names
+    js_page=urlopen(js_page_link).read()
+    chpt_list=eval('['+js_re.search(js_page).group(1)+']')
+    chpt_list.reverse()
+    chpt_list=[ x.split('/') for y,x in chpt_list] #chapter numbeers and the corresponding first page
+    print_scr("Total chapters: %i"%len(chpt_list))
+    
+    if chapt:
+        if not ignore_order:
+            chpt_list=[ x for x in chpt_list if int(x[0]) in chapt]
+        else:
+            chpt_list=[chpt_list[x-1] for x in chapt]
+    print_scr("Total chapter requested to download: %i"%len(chpt_list))
+    for chapter in chpt_list:
+        print_scr("\nTrying to Download Chapter:"+chapter[0])
+        chpt_url_1st_page=mangaurl+'/'.join(chapter)
+        print_scr("Fetching: "+chpt_url_1st_page)
+        ##get the list of pages
+        soup=BeautifulSoup(urlopen(chpt_url_1st_page).read())
+        page_list=[str(x['value'])+'.jpg' for x in soup.find('select',id='id_page_select').findAll('option')]
+        first_img=str(soup.find('img',{'class':'manga-page'})['src'])
+        img_url_list=[urljoin(first_img,x) for x in page_list]
+        no_of_img=len(img_url_list)
+        print_scr("Total Images to be downloaded from chapter %s:%i" % (chapter[0],no_of_img))
+        chapter_dir=os.path.join(mangadir,chapter[0])
+        for x in img_url_list:
+            i=img_url_list.index(x)
+            print_scr(' Downloading image %i of %i with URL=%s'%(i+1,no_of_img,x),True)
+            filename=os.path.basename(urlsplit(x).path)
+            localfile=os.path.join(chapter_dir,filename)
+            if (not os.path.exists(localfile)) or options.overwrite:                
+                ensure_dir(localfile)
+                if options.wget:
+                    import subprocess
+                    wgetcommand=["wget","-c","-O",localfile,x]
+                    print_scr("Executing: "+" ".join(wgetcommand),True)
+                    p=subprocess.Popen(wgetcommand,stdout=stdout)
+                    print_scr(p.communicate()[0])
+                else:
+                    for r in range(options.retries):
+                        try:
+                            print_scr('Saved File :'+ urlretrieve(x,localfile)[0])
+                            break
+                        except KeyboardInterrupt:
+                            raise KeyboardInterrupt
+                        except:
+                            print_scr('Retrying....')
+            else:
+                print_scr("File Exists. Can't overwrite or continue. Enable the -o switch to enable overwriting")
+            
+            
+
+            
+if __name__=='__main__':
+    #ignore the -d --directory if more than one manga is requested to be download
+    if len(args)>1:
+        options.dir=None
+    for x in args:
+        chapter_range=hyphen_range(options.chap) if options.chap else None
+        print_scr('Starting '+x,True)
+        downld_manga(x,options.dir,chapter_range)
