@@ -7,7 +7,9 @@ from sys import stdout
 from urllib import urlretrieve
 import os.path
 import re
-parser=OptionParser()
+usage = "usage: %prog [options] URL1 URL2 URL3... "
+
+parser=OptionParser(usage=usage)
 
 parser.add_option('-C','--chapters',dest='chap',help='Chapters to download. Accepts a hyphenated range Starting from 1. If not specified or exceeds than the actual chapters, downloads all the chapters.',metavar='RANGE')
 parser.add_option('-d','--directory',dest='dir',default=None, metavar='DIR',help='Directory in which the Manga is to be saved. Default will be a directory human-named according to the URL')
