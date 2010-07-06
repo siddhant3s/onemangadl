@@ -7,12 +7,12 @@ Copy the onemangadl and BeautifulSoup.py to /usr/bin
 ==Proper but long way==
 1).	 Copy the onemangadl to /usr/bin
 	      #:cd <onemangadl-directory?
-	      #:sudp cp onemangadl /usr/bin
+	      #:sudo cp onemangadl /usr/bin
 2).	 Install BeautifulSoup
 	 #: wget http://www.crummy.com/software/BeautifulSoup/download/3.x/BeautifulSoup-3.0.8.1.tar.gz
 	 #: tar -zxvpf BeautifulSoup-3.0.8.1.tar.gz
 	 #: sudo python BeautifulSoup-3.0.8.1/setup.py install
-	 #: sudo rm -rI BeautifulSoup-3.0.8.1 BeautifulSoup-3.0.8.1.tar.gz
+	 #: sudo rm -rI BeautifulSoup-3.0.8.1 build BeautifulSoup-3.0.8.1.tar.gz
 ----------------------------------------------------------------------------------------------------------
 
 This script downloads any manga (or multiple mangas) from onemanga.com.
