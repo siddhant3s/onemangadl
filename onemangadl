@@ -20,7 +20,7 @@ parser.add_option('-w','--wget',action='store_true',dest='wget',default=False,he
 parser.add_option('-r','--retries',type='int',dest='retries',default=3,help='Number of tries to download a file incase of error in downloading')
 (options,args)=parser.parse_args()
 
-js_re=re.compile(r'Array[(](.*)[)];var')
+js_re=re.compile(r'Array[(](.*)[)];[ ]*var')
 
 def print_scr(msg,verbose=False):
     if not options.quiet:
@@ -62,12 +62,13 @@ def downld_manga(first_page_url,manga_dir=None,chapt=None,ignore_order=True):
     #link_1stpage=urljoin(chp_url,rel_link_1stpage) #Full-url of first page
     print_scr("Link given "+first_page_url)
     soup=BeautifulSoup(urlopen(first_page_url).read()) #the first page
-    mangalink=str(soup.find('h1').findAll('a')[1]['href'])
+    mangalink=str(soup.findAll('h1')[-1].findAll('a')[1]['href'])
     mangaurl=urljoin(first_page_url,mangalink)
-    mangadir=manga_dir if manga_dir else str(soup.find('h1').findAll('a')[1].string) # if dir name is not specified let the manga name be dirname
+    mangadir=manga_dir if manga_dir else str(soup.findAll('h1')[-1].findAll('a')[1].string) # if dir name is not specified let the manga name be dirname
     print_scr("Manga Found :"+mangaurl)
     js_page_link=str(soup.findAll('script')[-1]['src']) #the page containgin the chapter names
     js_page=urlopen(js_page_link).read()
+    js_page=''.join(js_page.split('\r\n'))#clean by removing any new lines
     chpt_list=eval('['+js_re.search(js_page).group(1)+']')
     chpt_list.reverse()
     chpt_list=[ x.split('/') for y,x in chpt_list] #chapter numbeers and the corresponding first page
