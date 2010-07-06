@@ -35,4 +35,4 @@ In case you are not using -w swtich (for wget), you may be interested in setting
 
 Example:
 To download the first 3 chapters of `Death Note' on a *nix based system with wget, I would most probably use
-$: onemanga -C1-3 -w http://www.onemanga.com/Death_Note/0/001
+$: onemangadl -C1-3 -w http://www.onemanga.com/Death_Note/0/001
