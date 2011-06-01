@@ -23,6 +23,7 @@ parser.add_option('-r','--retries',type='int',dest='retries',default=3,help='Num
 js_re=re.compile(r'Array[(](.*)[)];[ ]*var')
 js_find_re=re.compile("manga-[0-9]*.js$")
 def print_scr(msg,verbose=False):
+    """Prints the msg only if quiet is not true. If second option is set true, then the msg is considered as a verbose-message and is displayed only if -v option is chosen"""
     if not options.quiet:
         if verbose==False:
             print msg
@@ -57,23 +58,15 @@ def downld_manga(first_page_url,manga_dir=None,chapt=None,ignore_order=True):
     ignore_order if set false, will require each chapt number to map to the actual number of the server.
     This only makes a difference when your starting chapter is not 1
     """
-    # soup=BeautifulSoup( #urlopen(chp_url).read())
-    #rel_link_1stpage=str(soup.find('div',id='chapter-cover').find('li').a['href'])#relative link to the first page
-    #link_1stpage=urljoin(chp_url,rel_link_1stpage) #Full-url of first page
     print_scr("Link given "+first_page_url)
     soup=BeautifulSoup(urlopen(first_page_url).read()) #the first page
-    mangalink=str(soup.findAll('h1')[-1].findAll('a')[1]['href'])
+    mangalink=str(soup.find("h2",attrs={"class":'c2'}).a['href'])
     mangaurl=urljoin(first_page_url,mangalink)
-    mangadir=manga_dir if manga_dir else str(soup.findAll('h1')[-1].findAll('a')[1].string) # if dir name is not specified let the manga name be dirname
+    mangadir=manga_dir if manga_dir else str(soup.find("h2",attrs={"class":'c2'}).a.string) # if dir name is not specified let the manga name be dirname
     print_scr("Manga Found :"+mangaurl)
-    js_page_link=str(soup.find('script',src=js_find_re)['src']) #the page containgin the chapter names
-    js_page=urlopen(js_page_link).read()
-    js_page=''.join(js_page.split('\r\n'))#clean by removing any new lines
-    chpt_list=eval('['+js_re.search(js_page).group(1)+']')
-    chpt_list.reverse()
-    chpt_list=[ x.split('/') for y,x in chpt_list] #chapter numbeers and the corresponding first page
+    soup2=BeautifulSoup(urlopen(mangaurl).read())
+    chpt_list=[i.parent.a["href"] for i in soup2.find("div",id="chapterlist").findAll("div",attrs={"class":"chico_manga"})]
     print_scr("Total chapters: %i"%len(chpt_list))
-    
     if chapt:
         if not ignore_order:
             chpt_list=[ x for x in chpt_list if int(x[0]) in chapt]
@@ -81,34 +74,35 @@ def downld_manga(first_page_url,manga_dir=None,chapt=None,ignore_order=True):
             chpt_list=[chpt_list[x-1] for x in chapt]
     print_scr("Total chapter requested to download: %i"%len(chpt_list))
     for chapter in chpt_list:
-        print_scr("\nTrying to Download Chapter:"+chapter[0])
-        chpt_url_1st_page=mangaurl+'/'.join(chapter)
+        print_scr("\nTrying to Download Chapter:"+chapter)
+        chpt_url_1st_page=urljoin(mangaurl,chapter)
         print_scr("Fetching: "+chpt_url_1st_page)
         ##get the list of pages
         soup=BeautifulSoup(urlopen(chpt_url_1st_page).read())
-        page_list=[str(x['value'])+'.jpg' for x in soup.find('select',id='id_page_select').findAll('option')]
-        first_img=str(soup.find('img',{'class':'manga-page'})['src'])
-        img_url_list=[urljoin(first_img,x) for x in page_list]
-        no_of_img=len(img_url_list)
-        print_scr("Total Images to be downloaded from chapter %s:%i" % (chapter[0],no_of_img))
-        chapter_dir=os.path.join(mangadir,chapter[0])
-        for x in img_url_list:
-            i=img_url_list.index(x)
-            print_scr(' Downloading image %i of %i with URL=%s'%(i+1,no_of_img,x),True)
-            filename=os.path.basename(urlsplit(x).path)
+        page_list=[str(i["value"]) for i in soup.find("select",id="pageMenu").findAll("option")]
+        print_scr("Total pages to be downloaded from chapter %s:%i" % (chapter,len(page_list)))
+        chaptername=str(soup.find("h1").string)
+        
+        chapter_dir=os.path.join(mangadir,chaptername)
+        for x in page_list:
+            pageurl=urljoin(chpt_url_1st_page,x)
+            page_soup=BeautifulSoup(urlopen(pageurl).read())
+            img_url=str(page_soup.find("img",id="img")["src"])
+            print_scr(' Downloading image %i of %i with URL=%s'%(page_list.index(x)+1,len(page_list),img_url),True)
+            filename=os.path.basename(urlsplit(img_url).path)
             localfile=os.path.join(chapter_dir,filename)
             if (not os.path.exists(localfile)) or options.overwrite:                
                 ensure_dir(localfile)
                 if options.wget:
                     import subprocess
-                    wgetcommand=["wget","-c","-O",localfile,x]
+                    wgetcommand=["wget","-c","-O",localfile,img_url]
                     print_scr("Executing: "+" ".join(wgetcommand),True)
                     p=subprocess.Popen(wgetcommand,stdout=stdout)
                     print_scr(p.communicate()[0])
                 else:
                     for r in range(options.retries):
                         try:
-                            print_scr('Saved File :'+ urlretrieve(x,localfile)[0])
+                            print_scr('Saved File :'+ urlretrieve(img_url,localfile)[0])
                             break
                         except KeyboardInterrupt:
                             raise KeyboardInterrupt
